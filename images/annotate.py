@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from math import cos, sin, pi
+from math import cos, sin, pi, atan2
 from .util import noise
 
 
@@ -45,3 +45,50 @@ def link(draw, frm, to, thickness=4, shakiness=0.4, fill=(255,0,0)):
             else:
                 x_ = x + i + offset
             draw.point((x_,y), fill=fill)
+
+
+def rand_bbox_point(bbox):
+    """choose a random point on a bounding box"""
+    x1, y1, x2, y2 = bbox
+    side = random.choice(['t', 'b', 'r', 'l'])
+    if side == 't':
+        y = y1
+        x = random.randint(x1, x2)
+    elif side == 'b':
+        y = y2
+        x = random.randint(x1, x2)
+    elif side == 'l':
+        x = x1
+        y = random.randint(y1, y2)
+    elif side == 'r':
+        x = x2
+        y = random.randint(y1, y2)
+    return x, y
+
+
+def angle(pt_a, pt_b):
+    """computes the angle between two points"""
+    x1, y1 = pt_a
+    x2, y2 = pt_b
+    return atan2(y2-y1, x2-x1)
+
+
+def point(pt, angle, dist):
+    """computes the point at a given angle and distance
+    from another point"""
+    x, y = pt
+    return dist * cos(angle) + x, dist * sin(angle) + y,
+
+
+def arrow(draw, bbox, thickness=3, fill=(0,255,0), arrlen=50, arrang=0.5):
+    x1, y1, x2, y2 = bbox
+    xc, yc = x1 + (x2-x1)/2, y1 + (y2-y1)/2
+    bbox_pt = rand_bbox_point(bbox)
+    theta = angle((xc, yc), bbox_pt)
+    head = point(bbox_pt, theta, 20)
+    tail = point(bbox_pt, theta, 20+arrlen)
+    draw.line([head, tail], fill=fill, width=thickness)
+    for ang in [arrang+theta, -arrang+theta]:
+        arrwing = point(head, ang, 20)
+        arrwing = (arrwing[0] + noise(10), arrwing[1] + noise(10))
+        draw.line([head, arrwing], fill=fill, width=thickness)

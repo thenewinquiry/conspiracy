@@ -117,12 +117,16 @@ def render(images, pairs, out='output.jpg', shakiness=30):
         for id in grp:
             colors[id] = color
 
-    # draw circles
+    # draw circles and arrows
     for id, im in images.items():
         annotate.circle(draw, im['bbox'], fill=colors[id])
+        if random.random() < 0.3:
+            print(im['bbox'])
+            annotate.arrow(draw, im['bbox'], fill=colors[id])
 
     # draw links
     for a, b in pairs:
+        print('linking:', (a, b))
         annotate.link(
             draw, images[a]['bbox'][:2], images[b]['bbox'][:2], fill=colors[a])
     canvas.save(out)

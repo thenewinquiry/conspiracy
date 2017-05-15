@@ -6,8 +6,8 @@ def noise(strength=1):
 
 
 def scale_rect(rect, scale):
-    return (rect[0] * scale[0], rect[1] * scale[1],
-            rect[2] * scale[0], rect[3] * scale[1])
+    return (round(rect[0] * scale[0]), round(rect[1] * scale[1]),
+            round(rect[2] * scale[0]), round(rect[3] * scale[1]))
 
 
 def shift_rect(rect, shift):
