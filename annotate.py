@@ -18,7 +18,7 @@ def circle(draw, bbox, thickness=4, loops=2):
     rot = (random.random() - 0.5) * 0.6
     a, b = w, h
     for loop in range(loops):
-        for r in np.arange(0, 2*pi, 1/(max(w, h))):
+        for r in np.arange(0, 2*pi + random.random(), 1/(max(w, h))):
             offset += random.random() - 0.5
             for i in range(thickness):
                 x, y = ellipse_pt(r, x_c, y_c, a+i+offset, b+i+offset, rot)

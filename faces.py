@@ -12,7 +12,7 @@ def extract_faces(path):
     fname = path.split('/')[-1]
     dir = 'data/faces/{}'.format(fname)
     if os.path.exists(dir):
-        return
+        return []
     else:
         os.makedirs(dir)
     bboxes = []
@@ -26,6 +26,7 @@ def extract_faces(path):
             bboxes.append(bbox)
         with open('{}/bboxes.json'.format(dir), 'w') as f:
             json.dump(bboxes, f)
+    return detected
 
 
 if __name__ == '__main__':

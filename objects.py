@@ -17,13 +17,13 @@ def extract_objects(path):
     fname = path.split('/')[-1]
     dir = 'data/objects/{}'.format(fname)
     if os.path.exists(dir):
-        return
+        return []
     else:
         os.makedirs(dir)
     try:
         image = Image.open(path).convert('RGB')
     except OSError:
-        return
+        return []
     detected = tfnet.return_predict(np.array(image))
     detected = [{
         'label': r['label'],
@@ -43,6 +43,7 @@ def extract_objects(path):
         json.dump(bboxes, f)
     with open('{}/labels.json'.format(dir), 'w') as f:
         json.dump(labels, f)
+    return detected
 
 
 

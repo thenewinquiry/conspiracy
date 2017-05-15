@@ -29,18 +29,11 @@ def compare(images, size=160):
 
             nrof_images = len(images)
 
-            # Print distance matrix
-            print('Distance matrix')
-            print('    ', end='')
+            dists = np.zeros((nrof_images, nrof_images))
             for i in range(nrof_images):
-                print('    %1d     ' % i, end='')
-            print('')
-            for i in range(nrof_images):
-                print('%1d  ' % i, end='')
                 for j in range(nrof_images):
-                    dist = np.sqrt(np.sum(np.square(np.subtract(emb[i,:], emb[j,:]))))
-                    print('  %1.4f  ' % dist, end='')
-                print('')
+                    dists[i,j] = np.sqrt(np.sum(np.square(np.subtract(emb[i,:], emb[j,:]))))
+            return dists
 
 
 def load_and_align_data(image_paths, image_size):

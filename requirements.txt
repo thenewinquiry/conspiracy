@@ -3,3 +3,4 @@ numpy==1.12.1
 Pillow==2.6.0
 dlib==19.4.0
 ImageHash==3.4
+rectpack==0.1
