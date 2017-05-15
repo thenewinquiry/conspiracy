@@ -11,7 +11,7 @@ def ellipse_pt(th, x_c, y_c, a, b, rot):
     return x, y
 
 
-def circle(draw, bbox, thickness=4, loops=2):
+def circle(draw, bbox, thickness=4, loops=2, fill=(255,0,0)):
     """draw a 'handdrawn' ellipse around a bounding box"""
     offset = 0
     x1, y1, x2, y2 = bbox
@@ -24,11 +24,11 @@ def circle(draw, bbox, thickness=4, loops=2):
             offset += noise()
             for i in range(thickness):
                 x, y = ellipse_pt(r, x_c, y_c, a+i+offset, b+i+offset, rot)
-                draw.point((x,y), fill=(255,0,0))
+                draw.point((x,y), fill=fill)
         a, b = a + 1, b + 1
 
 
-def link(draw, frm, to, thickness=4, shakiness=0.4):
+def link(draw, frm, to, thickness=4, shakiness=0.4, fill=(255,0,0)):
     """draw a 'handdrawn' line connecting two points"""
     offset = 0
     x_1, y_1 = frm
@@ -44,4 +44,4 @@ def link(draw, frm, to, thickness=4, shakiness=0.4):
                 x_ = x
             else:
                 x_ = x + i + offset
-            draw.point((x_,y), fill=(255,0,0))
+            draw.point((x_,y), fill=fill)

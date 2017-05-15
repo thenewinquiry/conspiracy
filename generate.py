@@ -11,6 +11,7 @@ SAMPLE = 200
 SIZE = (1400, 800)
 MAX_SIZE = (0.3, 0.3)
 MAX_SIZE = (MAX_SIZE[0]*SIZE[0], MAX_SIZE[1]*SIZE[1])
+COLORS = [(255,0,0), (0, 100, 255), (6, 214, 44), (242, 226, 4)]
 images = random.sample(glob('../reality/data/_images/*'), SAMPLE)
 
 
@@ -100,13 +101,30 @@ def render(images, pairs, out='output.jpg', shakiness=30):
         canvas.paste(im['image'], pos)
         im['bbox'] = util.shift_rect(im['bbox'], pos)
 
+    # group pairs to assign colors
+    groups = []
+    for pair in pairs:
+        a, b = pair
+        for grp in groups:
+            if a in grp or b in grp:
+                grp.add(a)
+                grp.add(b)
+        else:
+            groups.append(set([a, b]))
+    colors = {}
+    for grp in groups:
+        color = random.choice(COLORS)
+        for id in grp:
+            colors[id] = color
+
     # draw circles
-    for im in images.values():
-        annotate.circle(draw, im['bbox'])
+    for id, im in images.items():
+        annotate.circle(draw, im['bbox'], fill=colors[id])
 
     # draw links
     for a, b in pairs:
-        annotate.link(draw, images[a]['bbox'][:2], images[b]['bbox'][:2])
+        annotate.link(
+            draw, images[a]['bbox'][:2], images[b]['bbox'][:2], fill=colors[a])
     canvas.save(out)
 
 
