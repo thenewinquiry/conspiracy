@@ -1,3 +1,20 @@
+import random
+
+
+def noise(strength=1):
+    return (random.random() - 0.5) * strength
+
+
+def scale_rect(rect, scale):
+    return (rect[0] * scale[0], rect[1] * scale[1],
+            rect[2] * scale[0], rect[3] * scale[1])
+
+
+def shift_rect(rect, shift):
+    return (rect[0] + shift[0], rect[1] + shift[1],
+            rect[2] + shift[0], rect[3] + shift[1])
+
+
 def resize_to_limit(img, target_size):
     x_t, y_t = target_size
     x_i, y_i = img.size
@@ -40,10 +57,8 @@ def resize_to_fill(img, target_size):
 
     img = img.crop((l, u, r, d))
 
-    # Sometimes we may be one pixel off,
+    # sometimes we may be one pixel off,
     # so just adjust if necessary
     if img.size != target_size:
         img = img.resize(target_size)
     return img
-
-

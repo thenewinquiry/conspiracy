@@ -1,67 +1,39 @@
 import json
 import random
-import annotate
-import immanip
 import numpy as np
 from glob import glob
 from PIL import Image, ImageDraw
-from face_sim import compare
+from faces import compare_faces
 from itertools import chain
-from pack import pack
-from similarity import compute_dist, compute_dists
+from images import util, layout, compare, annotate
 
 SAMPLE = 200
 SIZE = (1400, 800)
-SHAKINESS = 30
-MAX_SIZE = (0.5, 0.5)
+MAX_SIZE = (0.3, 0.3)
 MAX_SIZE = (MAX_SIZE[0]*SIZE[0], MAX_SIZE[1]*SIZE[1])
 images = random.sample(glob('../reality/data/_images/*'), SAMPLE)
 
-def noise(strength):
-    return (random.random() - 0.5) * strength
 
 
-def get_objects(impath):
+def load_images(impath, type):
+    """load images given a parent image path"""
     imid = impath.split('/')[-1]
-    dir = 'data/objects/{}'.format(imid)
-    try:
-        bboxes = json.load(open('{}/bboxes.json'.format(dir), 'r'))
-        labels = json.load(open('{}/labels.json'.format(dir), 'r'))
-        crops = glob('{}/*.jpg'.format(dir))
-        return [{
-            'path': c,
-            'bbox': b,
-            'label': l,
-            'imid': imid
-        } for c, b, l in zip(crops, bboxes, labels)]
-    except FileNotFoundError:
-        return []
-
-
-def get_faces(impath):
-    imid = impath.split('/')[-1]
-    dir = 'data/faces/{}'.format(imid)
+    dir = 'data/{}/{}'.format(type, imid)
     try:
         bboxes = json.load(open('{}/bboxes.json'.format(dir), 'r'))
         crops = glob('{}/*.jpg'.format(dir))
         return [{
             'path': c,
             'bbox': b,
-            'imid': imid
+            'imid': imid,
+            'impath': impath
         } for c, b in zip(crops, bboxes)]
     except FileNotFoundError:
         return []
 
 
-def get_impath(imid):
-    return '../reality/data/_images/{}'.format(imid)
-
-def im_dist(imid_a, imid_b):
-    ims = [Image.open(get_impath(im)) for im in [imid_a, imid_b]]
-    return compute_dist(*ims)
-
-
 def filter_pairs(pairs, images):
+    """filters redundant image pairs"""
     # remove permutations
     pairs = set(tuple(sorted(p)) for p in pairs)
 
@@ -71,69 +43,62 @@ def filter_pairs(pairs, images):
     pairs = [(a, b) for a, b in pairs
              if a != b
              and images[a]['imid'] != images[b]['imid']
-             and im_dist(images[a]['imid'], images[b]['imid']) > 0.5] # TODO adjust this thresh
+             and compare.compute_dist(images[a]['impath'], images[b]['impath']) > 0.5] # TODO adjust this thresh
     return pairs
 
 
-def get_similar_faces(faces, thresh):
-    dists = compare([f['path'] for f in faces])
+def get_similar(images, thresh, comparator, prefix=None):
+    """get pairs of similar images,
+    according to the comparator (distance) function"""
+    dists = comparator([i['path'] for i in images])
     pairs = np.argwhere(dists <= thresh)
-    pairs = filter_pairs(pairs, faces)
+    pairs = filter_pairs(pairs, images)
 
     # get unique dist mat indices
     indices = set(chain(*pairs))
-    return pairs, {idx: faces[idx] for idx in indices}
+    images = {idx: images[idx] for idx in indices}
 
-
-def get_similar_objects(objs, thresh):
-    dists = compute_dists([o['path'] for o in objs])
-    pairs = np.argwhere(dists <= thresh)
-    pairs = filter_pairs(pairs, objs)
-
-    # get unique dist mat indices
-    indices = set(chain(*pairs))
-    return pairs, {idx: objs[idx] for idx in indices}
-
-
-def scale_rect(rect, scale):
-    return (rect[0] * scale[0], rect[1] * scale[1],
-            rect[2] * scale[0], rect[3] * scale[1])
-
-
-def shift_rect(rect, shift):
-    return (rect[0] + shift[0], rect[1] + shift[1],
-            rect[2] + shift[0], rect[3] + shift[1])
+    if prefix is not None:
+        # since indices can collide, add prefixes
+        pairs = [
+            ('{}{}'.format(prefix, a), '{}{}'.format(prefix, b))
+            for a, b in pairs]
+        images = {'{}{}'.format(prefix, k): v for k, v in images.items()}
+    return pairs, images
 
 
 def prepare_images(images):
+    """prepare images by loading and scaling them,
+    scaling their bounding boxes accordingly"""
     for image in images.values():
-        im = Image.open(get_impath(image['imid']))
+        im = Image.open(image['impath'])
         xo, yo = im.size
 
-        im = immanip.resize_to_limit(im, MAX_SIZE)
+        im = util.resize_to_limit(im, MAX_SIZE)
         xn, yn = im.size
 
         resize_ratio = (xn/xo, yn/yo)
 
         # scale bbox accordingly
-        image['bbox'] = scale_rect(image['bbox'], resize_ratio)
+        image['bbox'] = util.scale_rect(image['bbox'], resize_ratio)
         image['image'] = im
     return images
 
 
-def render(images, pairs, out='output.jpg'):
+def render(images, pairs, out='output.jpg', shakiness=30):
+    """collages the images, annotating similar pairs by drawing links"""
     canvas = Image.new('RGB', SIZE, color=0)
     draw = ImageDraw.Draw(canvas)
 
     # layout images
     # this doesn't guarantee that every image will be included!
-    packed = pack([im['image'] for im in images.values()], canvas)
+    packed = layout.pack([im['image'] for im in images.values()], canvas)
     for im, pos in zip(images.values(), packed):
         pos = (
-            round(pos[0] + noise(SHAKINESS)),
-            round(pos[1] + noise(SHAKINESS)))
+            round(pos[0] + util.noise(shakiness)),
+            round(pos[1] + util.noise(shakiness)))
         canvas.paste(im['image'], pos)
-        im['bbox'] = shift_rect(im['bbox'], pos)
+        im['bbox'] = util.shift_rect(im['bbox'], pos)
 
     # draw circles
     for im in images.values():
@@ -144,29 +109,26 @@ def render(images, pairs, out='output.jpg'):
         annotate.link(draw, images[a]['bbox'][:2], images[b]['bbox'][:2])
     canvas.save(out)
 
+
 if __name__ == '__main__':
     FACE_DIST_THRESH = 0.4
 
-    faces = []
-    objects = []
+    faces, objects = [], []
     for path in images:
-        faces.extend(get_faces(path))
-        objects.extend(get_objects(path))
+        faces.extend(load_images(path, 'faces'))
+        objects.extend(load_images(path, 'objects'))
 
     print('faces:', len(faces))
     print('objects:', len(objects))
-    fpairs, faces = get_similar_faces(faces, FACE_DIST_THRESH)
-    opairs, objects = get_similar_objects(objects, FACE_DIST_THRESH)
+    fpairs, faces = get_similar(faces, FACE_DIST_THRESH, compare_faces, prefix='f')
+    print('faces:', len(faces))
+    opairs, objects = get_similar(objects, 2, compare.compute_dists, prefix='o')
+    print('objects:', len(objects))
 
-    # since indices will collide, add prefixes
-    fpairs = [('f{}'.format(a), 'f{}'.format(b)) for a, b in fpairs]
-    faces = {'f{}'.format(k): v for k, v in faces.items()}
-    opairs = [('o{}'.format(a), 'o{}'.format(b)) for a, b in opairs]
-    objects = {'o{}'.format(k): v for k, v in objects.items()}
     pairs = fpairs + opairs
+    images = {**faces, **objects}
 
     if pairs:
-        images = prepare_images(objects)
-        render(images, opairs, out='output.jpg')
-        # images = prepare_images({**faces, **objects})
-        # render(images, fpairs + opairs, out='output.jpg')
+        print(pairs)
+        images = prepare_images(images)
+        render(images, pairs, out='output.jpg')

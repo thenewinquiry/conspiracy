@@ -1,36 +1,23 @@
 import random
-import requests
 import textwrap
-import lxml.html
-import lxml.cssselect
 from glob import glob
-from annotate import link
 from PIL import Image, ImageDraw, ImageFont
+from .annotate import link
+from .util import noise
 
 fonts = glob('assets/fonts/*.ttf')
 
 
-def noise(strength):
-    return (random.random() - 0.5) * strength
-
-
-def search(terms):
-    params = {'q': ' '.join(['"{}"'.format(t) for t in terms]), 'start': 90}
-    resp = requests.get('https://www.google.com/search', params=params)
-    html = lxml.html.fromstring(resp.content)
-    results = html.cssselect('.st')
-    texts = [el.text_content() for el in results]
-    return random.choice(texts)
-
-
-def render_text(text, terms, size=(400, 200)):
+def render_text(text, terms, size=(400, 200), fill=(20,20,20)):
+    """renders text to an image,
+    underlining the specified terms"""
     img = Image.new('RGB', size, (255,255,255))
     fnt = ImageFont.truetype(random.choice(fonts), 14)
     d = ImageDraw.Draw(img)
     shakiness = 8
     margin = offset = 20
     for line in textwrap.wrap(text, width=60):
-        d.text((margin,offset), line, font=fnt, fill=(20,20,20))
+        d.text((margin,offset), line, font=fnt, fill=fill)
         offset += fnt.getsize(line)[1]
         for term in terms:
             if term in line.lower():
@@ -48,10 +35,3 @@ def render_text(text, terms, size=(400, 200)):
 
     # trim to fit
     return img.crop((0,0,size[0],offset+margin))
-
-
-if __name__ == '__main__':
-    query = ['palantir', 'peter thiel']
-    text = search(query)
-    img = render_text(text, query)
-    img.save('output.jpg')

@@ -1,17 +1,16 @@
-"""calculates L2 distance between the embeddings of images."""
-#
 import os
-import facenet
-from PIL import Image
-from scipy import misc
 import numpy as np
 import tensorflow as tf
+from PIL import Image
+from scipy import misc
+from faces import facenet
 
 MODEL = 'assets/models/facenet/ms_celeb_1m/20170512-110547.pb'
 
 
-def compare(images, size=160):
-    images = load_and_align_data(images, size)
+def compare_faces(paths, size=160):
+    """calculates L2 distance between the embeddings of face images"""
+    images = load_and_align_data(paths, size)
     with tf.Graph().as_default():
         with tf.Session() as sess:
 
@@ -46,10 +45,3 @@ def load_and_align_data(image_paths, image_size):
         img_list[i] = prewhitened
     images = np.stack(img_list)
     return images
-
-
-if __name__ == '__main__':
-    from glob import glob
-    # it's too much to compare _all_ faces, so we need to sample
-    faces = glob('data/faces/00ea419edb9618e03e17b601f0fdd5fe/*.jpg')
-    compare(faces)

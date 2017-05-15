@@ -9,6 +9,8 @@ face_detector = dlib.get_frontal_face_detector()
 
 
 def extract_faces(path):
+    """extract faces (cropped images, bounding boxes)
+    for an image at the specified path"""
     fname = path.split('/')[-1]
     dir = 'data/faces/{}'.format(fname)
     if os.path.exists(dir):
@@ -27,9 +29,3 @@ def extract_faces(path):
         with open('{}/bboxes.json'.format(dir), 'w') as f:
             json.dump(bboxes, f)
     return detected
-
-
-if __name__ == '__main__':
-    from glob import glob
-    from parallel import run_parallel
-    run_parallel(glob('../reality/data/_images/*'), extract_faces)

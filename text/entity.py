@@ -1,3 +1,4 @@
+# TODO this isn't really module-ready
 import json
 from glob import glob
 from tqdm import tqdm

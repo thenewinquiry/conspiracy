@@ -7,7 +7,7 @@ hashfunc = imagehash.whash
 
 
 def compute_dists(paths):
-    # precompute distance matrix
+    """compute perceptual hash distance matrix for list of images"""
     mat = np.zeros((len(paths), len(paths)))
     hashes = [hashfunc(Image.open(p)) for p in paths]
     for i, j in combinations(range(len(hashes)), 2):
@@ -16,7 +16,8 @@ def compute_dists(paths):
     return mat
 
 
-def compute_dist(img_a, img_b):
-    hash_a = hashfunc(img_a)
-    hash_b = hashfunc(img_b)
+def compute_dist(path_a, path_b):
+    """compute perceptual hash distance between two images"""
+    hash_a = hashfunc(Image.open(path_a))
+    hash_b = hashfunc(Image.open(path_b))
     return hash_a - hash_b
