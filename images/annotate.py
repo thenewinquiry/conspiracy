@@ -1,7 +1,8 @@
 import random
 import numpy as np
-from math import cos, sin, pi, atan2
 from .util import noise
+from PIL import ImageDraw
+from math import cos, sin, pi, atan2
 
 
 def ellipse_pt(th, x_c, y_c, a, b, rot):
@@ -92,3 +93,21 @@ def arrow(draw, bbox, thickness=3, fill=(0,255,0), arrlen=50, arrang=0.5):
         arrwing = point(head, ang, 20)
         arrwing = (arrwing[0] + noise(10), arrwing[1] + noise(10))
         draw.line([head, arrwing], fill=fill, width=thickness)
+
+
+def underline_and_crop_bbox(img, bbox, margin=(140, 60), shakiness=8):
+    draw = ImageDraw.Draw(img)
+    bx1, by1, bx2, by2 = bbox
+    x1 = bx1 + noise(shakiness)
+    y1 = by2 + noise(shakiness)
+    x2 = bx2 + noise(shakiness)
+    y2 = by2 + noise(shakiness)
+    link(draw, (x1, y1), (x2, y2))
+
+    cx1 = round(bx1 - margin[0] + noise(shakiness))
+    cy1 = round(by1 - margin[1] + noise(shakiness))
+    cx2 = round(bx2 + margin[0] + noise(shakiness))
+    cy2 = round(by2 + margin[1] + noise(shakiness))
+
+    # trim to fit
+    return img.crop((cx1, cy1, cx2, cy2))

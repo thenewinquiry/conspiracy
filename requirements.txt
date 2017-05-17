@@ -5,3 +5,5 @@ dlib==19.4.0
 ImageHash==3.4
 rectpack==0.1
 ImageHash==3.4
+pytesseract==0.1.6
+selenium==3.4.1

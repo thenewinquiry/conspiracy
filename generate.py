@@ -1,11 +1,13 @@
 import json
 import random
+import hashlib
 import numpy as np
 from glob import glob
 from PIL import Image, ImageDraw
 from faces import compare_faces
 from itertools import chain
 from images import util, layout, compare, annotate
+from text import shot, ocr
 
 SAMPLE = 200
 SIZE = (1400, 800)
@@ -13,7 +15,22 @@ MAX_SIZE = (0.3, 0.3)
 MAX_SIZE = (MAX_SIZE[0]*SIZE[0], MAX_SIZE[1]*SIZE[1])
 COLORS = [(255,0,0), (0, 100, 255), (6, 214, 44), (242, 226, 4)]
 images = random.sample(glob('../reality/data/_images/*'), SAMPLE)
+ENTS = ['ORG', 'GPE', 'NORP', 'PERSON', 'EVENT' , 'WORK_OF_ART']
 
+
+
+def hash(text):
+    return hashlib.md5(text.encode('utf8')).hexdigest()
+
+
+def lookup_article(imid):
+    # ugh no reverse lookup, brute force search for now
+    files = glob('../reality/data/**/*.json')
+    for path in files:
+        data = json.load(open(path, 'r'))
+        for a in data:
+            if hash(a['image']) == imid:
+                return a
 
 
 def load_images(impath, type):
@@ -44,7 +61,7 @@ def filter_pairs(pairs, images):
     pairs = [(a, b) for a, b in pairs
              if a != b
              and images[a]['imid'] != images[b]['imid']
-             and compare.compute_dist(images[a]['impath'], images[b]['impath']) > 0.5] # TODO adjust this thresh
+             and compare.compute_dist(images[a]['impath'], images[b]['impath']) >= 20]
     return pairs
 
 
@@ -91,15 +108,38 @@ def render(images, pairs, out='output.jpg', shakiness=30):
     canvas = Image.new('RGB', SIZE, color=0)
     draw = ImageDraw.Draw(canvas)
 
+    # get articles
+    articles = [lookup_article(im['imid']) for im in images.values()]
+    articles = random.sample(articles, min(len(articles), 4))
+    texts = []
+    for a in articles:
+        ents = [e.strip() for e, typ in a['entities'] if typ in ENTS and len(e) > 1]
+        ent = random.choice(ents)
+        shot.screenshot(a['url'], '/tmp/shot.png')
+        words = ocr.ocr('/tmp/shot.png')
+        bboxes = words.get(ent, [])
+        if bboxes:
+            bbox = random.choice(bboxes)
+            img = Image.open('/tmp/shot.png')
+            img = annotate.underline_and_crop_bbox(img, bbox)
+            texts.append({
+                'image': img
+            })
+
+    vals = list(images.values()) + texts
+    random.shuffle(vals)
+    ims = [im['image'] for im in vals]
+
     # layout images
     # this doesn't guarantee that every image will be included!
-    packed = layout.pack([im['image'] for im in images.values()], canvas)
-    for im, pos in zip(images.values(), packed):
+    packed = layout.pack(ims, canvas)
+    for im, pos in zip(vals, packed):
         pos = (
             round(pos[0] + util.noise(shakiness)),
             round(pos[1] + util.noise(shakiness)))
         canvas.paste(im['image'], pos)
-        im['bbox'] = util.shift_rect(im['bbox'], pos)
+        if 'bbox' in im:
+            im['bbox'] = util.shift_rect(im['bbox'], pos)
 
     # group pairs to assign colors
     groups = []
@@ -111,6 +151,7 @@ def render(images, pairs, out='output.jpg', shakiness=30):
                 grp.add(b)
         else:
             groups.append(set([a, b]))
+
     colors = {}
     for grp in groups:
         color = random.choice(COLORS)
@@ -121,7 +162,6 @@ def render(images, pairs, out='output.jpg', shakiness=30):
     for id, im in images.items():
         annotate.circle(draw, im['bbox'], fill=colors[id])
         if random.random() < 0.3:
-            print(im['bbox'])
             annotate.arrow(draw, im['bbox'], fill=colors[id])
 
     # draw links
@@ -129,6 +169,7 @@ def render(images, pairs, out='output.jpg', shakiness=30):
         print('linking:', (a, b))
         annotate.link(
             draw, images[a]['bbox'][:2], images[b]['bbox'][:2], fill=colors[a])
+
     canvas.save(out)
 
 
