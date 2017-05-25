@@ -154,6 +154,7 @@ def render(images, pairs, out='output.jpg', shakiness=30, debug=True):
 
 
 if __name__ == '__main__':
+    from time import sleep
     logging.basicConfig(level=logging.INFO)
 
     # need to remove guardian images
@@ -164,56 +165,60 @@ if __name__ == '__main__':
         for a in json.load(open(p, 'r')):
             g_ids.append('{}/data/_images/{}'.format(config.REALITY_PATH, util.hash(a['image'])))
 
-    misc_images = glob('assets/commons/*')
-    news_images = [p for p in glob('{}/data/_images/*'.format(config.REALITY_PATH)) if p not in g_ids]
-    logger.info('news images: {}, misc images: {}'.format(len(news_images), len(misc_images)))
+    while True:
+        misc_images = glob('assets/commons/*')
+        news_images = [p for p in glob('{}/data/_images/*'.format(config.REALITY_PATH)) if p not in g_ids]
+        logger.info('news images: {}, misc images: {}'.format(len(news_images), len(misc_images)))
 
-    paths = random.sample(news_images, config.SAMPLE[0]) + random.sample(misc_images, config.SAMPLE[1])
-    images = []
-    for path in paths:
-        try:
-            images.append(Img(path))
-        except OSError:
-            continue
-    logger.info('images: {}'.format(len(images)))
+        paths = random.sample(news_images, config.SAMPLE[0]) + random.sample(misc_images, config.SAMPLE[1])
+        images = []
+        for path in paths:
+            try:
+                images.append(Img(path))
+            except OSError:
+                continue
+        logger.info('images: {}'.format(len(images)))
 
-    logger.info('filtering similar images...')
-    images = compare.filter_similar(images, config.IMAGE_SIM_THRESH)
-    logger.info('remaining images: {}'.format(len(images)))
+        logger.info('filtering similar images...')
+        images = compare.filter_similar(images, config.IMAGE_SIM_THRESH)
+        logger.info('remaining images: {}'.format(len(images)))
 
-    faces, objects = {}, {}
-    for img in images:
-        faces.update(img.faces)
-        objects.update(img.objects)
+        faces, objects = {}, {}
+        for img in images:
+            faces.update(img.faces)
+            objects.update(img.objects)
 
-    logger.info('faces: {}'.format(len(faces)))
-    logger.info('objects: {}'.format(len(objects)))
-    fpairs, fids = get_similar(faces, config.FACE_DIST_THRESH, compare_faces)
-    opairs, oids = get_similar(objects, config.OBJ_DIST_THRESH, compare.compute_dists)
+        logger.info('faces: {}'.format(len(faces)))
+        logger.info('objects: {}'.format(len(objects)))
+        fpairs, fids = get_similar(faces, config.FACE_DIST_THRESH, compare_faces)
+        opairs, oids = get_similar(objects, config.OBJ_DIST_THRESH, compare.compute_dists)
 
-    eids = fids.union(oids)
-    pairs = fpairs + opairs
+        eids = fids.union(oids)
+        pairs = fpairs + opairs
 
-    # only include images which have entities present in pairs
-    images = [img for img in images
-              if any(id in eids for id in img.entities.keys())]
-    logger.info('pairs: {}'.format(len(pairs)))
-    logger.info('images: {}'.format(len(images)))
+        # only include images which have entities present in pairs
+        images = [img for img in images
+                if any(id in eids for id in img.entities.keys())]
+        logger.info('pairs: {}'.format(len(pairs)))
+        logger.info('images: {}'.format(len(images)))
 
-    if len(pairs) >= config.MIN_PAIRS:
-        fname  = datetime.utcnow().strftime('%Y%m%d%H%M')
-        meta = render(images, pairs, out='public/vault/{}.jpg'.format(fname))
-        with open('public/vault/{}.json'.format(fname), 'w') as f:
-            json.dump(meta, f)
+        if len(pairs) >= config.MIN_PAIRS:
+            fname  = datetime.utcnow().strftime('%Y%m%d%H%M')
+            meta = render(images, pairs, out='public/vault/{}.jpg'.format(fname))
+            if meta is not None:
+                with open('public/vault/{}.json'.format(fname), 'w') as f:
+                    json.dump(meta, f)
 
-        tmpl = open('assets/templates/index.html', 'r').read()
-        html = tmpl.format(latest='vault/{}.jpg'.format(fname))
-        with open('public/index.html', 'w') as f:
-            f.write(html)
+                tmpl = open('assets/templates/index.html', 'r').read()
+                figs = ['<figure><img src="{}"></figure>'.format(im.replace('public/', ''))
+                        for im in sorted(glob('public/vault/*.jpg'), reverse=True)]
+                html = tmpl.format(figures='\n'.join(figs))
+                with open('public/index.html', 'w') as f:
+                    f.write(html)
 
-        tmpl = open('assets/templates/listing.html', 'r').read()
-        figs = ['<figure style="background:url({});"></figure>'
-                for im in glob('public/vault/*.jpg')]
-        html = tmpl.format(figures='\n'.join(figs))
-        with open('public/history/index.html', 'w') as f:
-            f.write(html)
+                # update site
+                util.upload([
+                    ('public/index.html', 'index.html'),
+                    ('public/vault/{}.jpg'.format(fname), 'vault/{}.jpg'.format(fname))
+                ])
+        sleep(config.INTERVAL)

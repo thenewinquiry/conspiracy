@@ -16,7 +16,20 @@ NOTES = [
     'coincidence??',
     'ok...',
     'remind you of anything??',
-    'the SAME'
+    'the SAME',
+    'buy my nootropics stack',
+    '->$ follow the money ->$',
+    'come back to this',
+    'SOROS',
+    'where were they on that night?',
+    'alex was right',
+    'if you know what this is tell me!',
+    'DELETE after reading',
+    'wtf??',
+    'hmm...',
+    'they cant HIDE this',
+    'just making connections',
+    'LIES'
 ]
 
 
@@ -28,9 +41,11 @@ MIN_IMAGES = 5
 MANGLE_PROB = 0.3
 PADDING = 50
 MAX_SIZE = (MAX_SIZE[0]*SIZE[0], MAX_SIZE[1]*SIZE[1])
+INTERVAL = 60 * 60 * 5
 
 SAMPLE = (250, 400)
 FACE_DIST_THRESH = 0.3
 OBJ_DIST_THRESH = 2
 IMAGE_SIM_THRESH = 3
 REALITY_PATH = '../reality'
+REMOTE_PATH = '/srv/conspiracy'

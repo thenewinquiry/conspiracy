@@ -2,6 +2,8 @@ import config
 import random
 import hashlib
 import networkx as nx
+from scp import SCPClient
+from paramiko import SSHClient, AutoAddPolicy
 
 
 def hash(text):
@@ -66,3 +68,14 @@ def assign_entity_colors(pairs):
         for id in grp:
             colors[id] = color
     return colors
+
+
+def upload(paths):
+    ssh = SSHClient()
+    ssh.load_system_host_keys()
+    ssh.set_missing_host_key_policy(AutoAddPolicy())
+    ssh.connect('darkinquiry.com')
+    scp = SCPClient(ssh.get_transport())
+    for frm, to in paths:
+        scp.put(frm, '{}/{}'.format(config.REMOTE_PATH, to))
+    scp.close()
