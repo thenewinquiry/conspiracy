@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from .util import noise
+from util import noise
 from PIL import ImageDraw
 from math import cos, sin, pi, atan2
 
@@ -32,11 +32,12 @@ def circle(draw, bbox, thickness=4, loops=2, fill=(255,0,0)):
 def link(draw, frm, to, thickness=4, shakiness=0.4, fill=(255,0,0)):
     """draw a 'handdrawn' line connecting two points"""
     offset = 0
+    eps = 0.0001
     x_1, y_1 = frm
     x_2, y_2 = to
-    m = (y_2-y_1)/(x_2-x_1)
+    m = (y_2-y_1)/(x_2-x_1+eps)
     b = y_1-(m*x_1)
-    for x in np.arange(x_1, x_2, 0.1):
+    for x in np.arange(x_1, x_2, 0.05):
         offset += noise(shakiness)
         for i in range(thickness):
             y = m * x + b
@@ -111,3 +112,10 @@ def underline_and_crop_bbox(img, bbox, margin=(140, 60), shakiness=8):
 
     # trim to fit
     return img.crop((cx1, cy1, cx2, cy2))
+
+
+def label(draw, text, pos, fill=(0,0,0), color=(244,244,66), bg=True, font=None):
+    w, h = draw.textsize(text, font=font)
+    if bg:
+        draw.rectangle([tuple(pos), (pos[0]+w, pos[1]+h)], fill=fill)
+    draw.text(pos, text, fill=color, font=font)

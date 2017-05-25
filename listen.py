@@ -1,12 +1,13 @@
+"""
+listens to a FIFO queue that's updated by `reality`
+"""
+
 import json
-import hashlib
 import fasteners
 from time import sleep
 from faces import extract_faces
 from objects import extract_objects
-
-def hash(text):
-    return hashlib.md5(text.encode('utf8')).hexdigest()
+from util import hash
 
 
 def on_article(article):

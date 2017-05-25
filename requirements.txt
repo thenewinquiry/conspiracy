@@ -7,3 +7,4 @@ rectpack==0.1
 ImageHash==3.4
 pytesseract==0.1.6
 selenium==3.4.1
+networkx==1.11

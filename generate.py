@@ -1,197 +1,219 @@
+import os
 import json
+import util
+import config
 import random
-import hashlib
+import logging
 import numpy as np
 from glob import glob
-from PIL import Image, ImageDraw
-from faces import compare_faces
 from itertools import chain
-from images import util, layout, compare, annotate
-from text import shot, ocr
+from datetime import datetime
+from faces import compare_faces
+from models import Img, Screenshot
+from text import extract_screenshots
+from PIL import Image, ImageDraw, ImageOps, ImageFont
+from images import transform, layout, compare, annotate, mangle
 
-SAMPLE = 200
-SIZE = (1400, 800)
-MAX_SIZE = (0.3, 0.3)
-MAX_SIZE = (MAX_SIZE[0]*SIZE[0], MAX_SIZE[1]*SIZE[1])
-COLORS = [(255,0,0), (0, 100, 255), (6, 214, 44), (242, 226, 4)]
-images = random.sample(glob('../reality/data/_images/*'), SAMPLE)
-ENTS = ['ORG', 'GPE', 'NORP', 'PERSON', 'EVENT' , 'WORK_OF_ART']
+# tensorflow logging
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-
-
-def hash(text):
-    return hashlib.md5(text.encode('utf8')).hexdigest()
+logger = logging.getLogger('conspiracy')
 
 
-def lookup_article(imid):
-    # ugh no reverse lookup, brute force search for now
-    files = glob('../reality/data/**/*.json')
-    for path in files:
-        data = json.load(open(path, 'r'))
-        for a in data:
-            if hash(a['image']) == imid:
-                return a
+def get_similar(entities, thresh, comparator):
+    """get pairs of similar images,
+    according to the comparator (distance) function"""
+    entities = [(k, v['path']) for k, v in entities.items()]
+    ids, paths = zip(*entities)
+    dists = comparator(paths)
+    pairs = np.argwhere(dists <= thresh)
 
-
-def load_images(impath, type):
-    """load images given a parent image path"""
-    imid = impath.split('/')[-1]
-    dir = 'data/{}/{}'.format(type, imid)
-    try:
-        bboxes = json.load(open('{}/bboxes.json'.format(dir), 'r'))
-        crops = glob('{}/*.jpg'.format(dir))
-        return [{
-            'path': c,
-            'bbox': b,
-            'imid': imid,
-            'impath': impath
-        } for c, b in zip(crops, bboxes)]
-    except FileNotFoundError:
-        return []
-
-
-def filter_pairs(pairs, images):
-    """filters redundant image pairs"""
     # remove permutations
     pairs = set(tuple(sorted(p)) for p in pairs)
 
+    # get entity ids and
     # filter out self-pairings
+    pairs = [(ids[a], ids[b]) for a, b in pairs if a != b]
+
     # filter out pairs that are between two of the same images
-    # filter out pairs that are from really similar images
     pairs = [(a, b) for a, b in pairs
-             if a != b
-             and images[a]['imid'] != images[b]['imid']
-             and compare.compute_dist(images[a]['impath'], images[b]['impath']) >= 20]
-    return pairs
+             if a.split('_')[0] != b.split('_')[0]]
+
+    # unique ids included in pairs
+    ids = set(chain(*pairs))
+    return pairs, ids
 
 
-def get_similar(images, thresh, comparator, prefix=None):
-    """get pairs of similar images,
-    according to the comparator (distance) function"""
-    dists = comparator([i['path'] for i in images])
-    pairs = np.argwhere(dists <= thresh)
-    pairs = filter_pairs(pairs, images)
 
-    # get unique dist mat indices
-    indices = set(chain(*pairs))
-    images = {idx: images[idx] for idx in indices}
-
-    if prefix is not None:
-        # since indices can collide, add prefixes
-        pairs = [
-            ('{}{}'.format(prefix, a), '{}{}'.format(prefix, b))
-            for a, b in pairs]
-        images = {'{}{}'.format(prefix, k): v for k, v in images.items()}
-    return pairs, images
-
-
-def prepare_images(images):
-    """prepare images by loading and scaling them,
-    scaling their bounding boxes accordingly"""
-    for image in images.values():
-        im = Image.open(image['impath'])
-        xo, yo = im.size
-
-        im = util.resize_to_limit(im, MAX_SIZE)
-        xn, yn = im.size
-
-        resize_ratio = (xn/xo, yn/yo)
-
-        # scale bbox accordingly
-        image['bbox'] = util.scale_rect(image['bbox'], resize_ratio)
-        image['image'] = im
-    return images
-
-
-def render(images, pairs, out='output.jpg', shakiness=30):
+def render(images, pairs, out='output.jpg', shakiness=30, debug=True):
     """collages the images, annotating similar pairs by drawing links"""
-    canvas = Image.new('RGB', SIZE, color=0)
+    canvas = Image.new('RGB', config.SIZE, color=0)
     draw = ImageDraw.Draw(canvas)
+    meta = {
+        'name': out,
+        'padding': config.PADDING,
+        'images': {}
+    }
+
+    image_ref = {im.id: im for im in images}
+
+    edges = []
+    for a, b in pairs:
+        a_im_path = a.rsplit('_', 2)[0]
+        b_im_path = b.rsplit('_', 2)[0]
+        edges.append((image_ref[a_im_path], image_ref[b_im_path]))
+    images = util.walk_sort(edges)
+    logger.info('after sorting: {}'.format(len(images)))
+
+    if len(images) < config.MIN_IMAGES:
+        return
 
     # get articles
-    articles = [lookup_article(im['imid']) for im in images.values()]
-    articles = random.sample(articles, min(len(articles), 4))
-    texts = []
-    for a in articles:
-        ents = [e.strip() for e, typ in a['entities'] if typ in ENTS and len(e) > 1]
-        ent = random.choice(ents)
-        shot.screenshot(a['url'], '/tmp/shot.png')
-        words = ocr.ocr('/tmp/shot.png')
-        bboxes = words.get(ent, [])
-        if bboxes:
-            bbox = random.choice(bboxes)
-            img = Image.open('/tmp/shot.png')
-            img = annotate.underline_and_crop_bbox(img, bbox)
-            texts.append({
-                'image': img
-            })
+    articles = [im.article for im in images if im.article is not None]
+    articles = random.sample(articles, min(len(articles), 5))
 
-    vals = list(images.values()) + texts
-    random.shuffle(vals)
-    ims = [im['image'] for im in vals]
+    # extract screenshots of text
+    texts = extract_screenshots(articles)
+    vals = images + texts
+    ims = [im.im for im in vals]
+    logger.info('total source material: {}'.format(len(ims)))
 
-    # layout images
-    # this doesn't guarantee that every image will be included!
-    packed = layout.pack(ims, canvas)
-    for im, pos in zip(vals, packed):
-        pos = (
-            round(pos[0] + util.noise(shakiness)),
-            round(pos[1] + util.noise(shakiness)))
-        canvas.paste(im['image'], pos)
-        if 'bbox' in im:
-            im['bbox'] = util.shift_rect(im['bbox'], pos)
+    # layout images (may not include all)
+    to_place = layout.layout(vals, canvas, shakiness=shakiness)
 
-    # group pairs to assign colors
-    groups = []
-    for pair in pairs:
-        a, b = pair
-        for grp in groups:
-            if a in grp or b in grp:
-                grp.add(a)
-                grp.add(b)
-        else:
-            groups.append(set([a, b]))
+    # include at least one screenshot if there are any
+    logger.info('extracted texts: {}'.format(texts))
+    if not any(isinstance(im, Screenshot) for im, _ in to_place) and texts:
+        logger.info('adding text')
+        img, pos = to_place.pop(-1)
+        txt = texts[0]
+        txt.resize_to_limit(img.size)
+        to_place.append(txt, pos)
 
-    colors = {}
-    for grp in groups:
-        color = random.choice(COLORS)
-        for id in grp:
-            colors[id] = color
+    # paste selections into image
+    placed_ents = []
+    for img, pos in to_place:
+        meta['images'][img.id] = {
+            'pos': pos,
+            'size': img.size
+        }
+        placed_ents.extend(list(img.entities.keys()))
+
+        im = img.im
+        if not isinstance(img, Screenshot) and random.random() <= config.MANGLE_PROB:
+            im = mangle.mangle(img.im)
+        canvas.paste(im, pos)
+        if debug and getattr(img, 'path', None) is not None:
+            annotate.label(draw, img.path, pos)
+        for e in getattr(img, 'entities', {}).values():
+            e['bbox'] = transform.shift_rect(e['bbox'], pos)
+
+    # generate notes
+    phrs = random.sample(config.NOTES, random.randint(2, 5))
+    font = ImageFont.truetype('assets/font.ttf', 26)
+    for ph in phrs:
+        w, h = draw.textsize(ph, font=font)
+        pos = (random.randint(20, config.SIZE[0]-w), random.randint(20, config.SIZE[1]-h))
+        annotate.label(draw, ph, pos, bg=False, color=(255,255,255), font=font)
+
+    # filter out pairs that have an unplaced image
+    pairs = [(a, b) for a, b in pairs
+             if a in placed_ents and b in placed_ents]
+
+    eids = set(chain(*pairs))
+    entities = {}
+    for img in images:
+        for id, e in img.entities.items():
+            if id in eids:
+                entities[id] = e
+
+    canvas = ImageOps.expand(canvas, config.PADDING, fill=0)
+    draw = ImageDraw.Draw(canvas)
 
     # draw circles and arrows
-    for id, im in images.items():
-        annotate.circle(draw, im['bbox'], fill=colors[id])
+    colors = util.assign_entity_colors(pairs)
+    for id, e in entities.items():
+        bbox = [v+config.PADDING for v in e['bbox']]
+        annotate.circle(draw, bbox, fill=colors[id])
         if random.random() < 0.3:
-            annotate.arrow(draw, im['bbox'], fill=colors[id])
+            annotate.arrow(draw, bbox, fill=colors[id])
+        if debug:
+            annotate.label(draw, id, bbox[:2])
 
     # draw links
     for a, b in pairs:
-        print('linking:', (a, b))
+        logger.info('linking: {}'.format((a, b)))
+        ax, ay = entities[a]['bbox'][:2]
+        bx, by = entities[b]['bbox'][:2]
         annotate.link(
-            draw, images[a]['bbox'][:2], images[b]['bbox'][:2], fill=colors[a])
+            draw, (ax+config.PADDING, ay+config.PADDING), (bx+config.PADDING, by+config.PADDING), fill=colors[a])
 
     canvas.save(out)
+    meta['size'] = canvas.size
+    return meta
 
 
 if __name__ == '__main__':
-    FACE_DIST_THRESH = 0.4
+    logging.basicConfig(level=logging.INFO)
 
-    faces, objects = [], []
-    for path in images:
-        faces.extend(load_images(path, 'faces'))
-        objects.extend(load_images(path, 'objects'))
+    # need to remove guardian images
+    # they all have a huge watermark...
+    g = glob('{}/data/theguardian.com/*.json'.format(config.REALITY_PATH))
+    g_ids = []
+    for p in g:
+        for a in json.load(open(p, 'r')):
+            g_ids.append('{}/data/_images/{}'.format(config.REALITY_PATH, util.hash(a['image'])))
 
-    print('faces:', len(faces))
-    print('objects:', len(objects))
-    fpairs, faces = get_similar(faces, FACE_DIST_THRESH, compare_faces, prefix='f')
-    print('faces:', len(faces))
-    opairs, objects = get_similar(objects, 2, compare.compute_dists, prefix='o')
-    print('objects:', len(objects))
+    misc_images = glob('assets/commons/*')
+    news_images = [p for p in glob('{}/data/_images/*'.format(config.REALITY_PATH)) if p not in g_ids]
+    logger.info('news images: {}, misc images: {}'.format(len(news_images), len(misc_images)))
 
+    paths = random.sample(news_images, config.SAMPLE[0]) + random.sample(misc_images, config.SAMPLE[1])
+    images = []
+    for path in paths:
+        try:
+            images.append(Img(path))
+        except OSError:
+            continue
+    logger.info('images: {}'.format(len(images)))
+
+    logger.info('filtering similar images...')
+    images = compare.filter_similar(images, config.IMAGE_SIM_THRESH)
+    logger.info('remaining images: {}'.format(len(images)))
+
+    faces, objects = {}, {}
+    for img in images:
+        faces.update(img.faces)
+        objects.update(img.objects)
+
+    logger.info('faces: {}'.format(len(faces)))
+    logger.info('objects: {}'.format(len(objects)))
+    fpairs, fids = get_similar(faces, config.FACE_DIST_THRESH, compare_faces)
+    opairs, oids = get_similar(objects, config.OBJ_DIST_THRESH, compare.compute_dists)
+
+    eids = fids.union(oids)
     pairs = fpairs + opairs
-    images = {**faces, **objects}
 
-    if pairs:
-        print(pairs)
-        images = prepare_images(images)
-        render(images, pairs, out='output.jpg')
+    # only include images which have entities present in pairs
+    images = [img for img in images
+              if any(id in eids for id in img.entities.keys())]
+    logger.info('pairs: {}'.format(len(pairs)))
+    logger.info('images: {}'.format(len(images)))
+
+    if len(pairs) >= config.MIN_PAIRS:
+        fname  = datetime.utcnow().strftime('%Y%m%d%H%M')
+        meta = render(images, pairs, out='public/vault/{}.jpg'.format(fname))
+        with open('public/vault/{}.json'.format(fname), 'w') as f:
+            json.dump(meta, f)
+
+        tmpl = open('assets/templates/index.html', 'r').read()
+        html = tmpl.format(latest='vault/{}.jpg'.format(fname))
+        with open('public/index.html', 'w') as f:
+            f.write(html)
+
+        tmpl = open('assets/templates/listing.html', 'r').read()
+        figs = ['<figure style="background:url({});"></figure>'
+                for im in glob('public/vault/*.jpg')]
+        html = tmpl.format(figures='\n'.join(figs))
+        with open('public/history/index.html', 'w') as f:
+            f.write(html)

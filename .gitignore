@@ -1,2 +1,5 @@
 fifo
-output.jpg
+*.sql
+*.log
+assets/commons
+assets/commons_urls

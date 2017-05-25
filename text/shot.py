@@ -6,6 +6,7 @@ def screenshot(url, path):
     # open in webpage
     driver = webdriver.PhantomJS()
     driver.set_window_size(1080, 800)
+    driver.set_page_load_timeout(30)
     driver.get(url)
     driver.save_screenshot(path)
     driver.quit()
