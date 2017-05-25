@@ -39,3 +39,15 @@ sampler.fetch_sample(100)
 ```
 
 this program expects to be registered as a listener for [`reality`](https://github.com/frnsys/reality), which creates a FIFO file (`fifo`) that `main.py` polls for new articles to process. run `listen.py` to listen to the FIFO queue and automatically run object/face detection on new images.
+
+## conspire
+
+to generate a conspiracy, run `generate.py`.
+
+you can view the latest conspiracy by running an HTTP server from `public/`, e.g.:
+
+    cd public
+    python3 -m http.server
+
+visiting the `/history` endpoint will show all generated conspiracies.
+
