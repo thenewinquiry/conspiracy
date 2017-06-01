@@ -30,23 +30,31 @@ def ocr(image_path):
     return bboxes, seq
 
 
-def find_sequence(image_path, terms):
+def find_sequence(image_path, terms, misses=2, min_len=0.6):
     """attempt to find a sequence of bounding boxes
     matching a sequence of terms"""
     _, seq = ocr(image_path)
 
     bboxes = []
     queue = terms
+    misses_ = misses
     for term, bbox in seq:
         if not queue:
             break
         if term == queue[0]:
-            queue.pop(0)
-            bboxes.append(bbox)
+            bboxes.append((
+                queue.pop(0), bbox))
+            misses_ = misses
+        elif bboxes and misses_ > 0:
+            misses_ -= 1
+            bboxes.append((
+                queue.pop(0), None))
         else:
             # reset
             bboxes = []
             queue = terms
-    if len(bboxes) != len(terms):
-        return []
-    return bboxes
+            misses_ = misses
+    bboxes =  [b for _, b in bboxes if b is not None]
+    if len(bboxes) >= round(len(terms) * min_len):
+        return bboxes
+    return []

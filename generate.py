@@ -88,7 +88,7 @@ def render(images, pairs, out='output.jpg', shakiness=30, debug=True):
         img, pos = to_place.pop(-1)
         txt = texts[0]
         txt.resize_to_limit(img.size)
-        to_place.append(txt, pos)
+        to_place.append((txt, pos))
 
     # paste selections into image
     placed_ents = []
@@ -103,8 +103,9 @@ def render(images, pairs, out='output.jpg', shakiness=30, debug=True):
         if not isinstance(img, Screenshot) and random.random() <= config.MANGLE_PROB:
             im = mangle.mangle(img.im)
         canvas.paste(im, pos)
-        if debug and getattr(img, 'path', None) is not None:
-            annotate.label(draw, img.path, pos)
+        if debug:
+            label = getattr(img, 'path', img.id)
+            annotate.label(draw, label, pos)
         for e in getattr(img, 'entities', {}).values():
             e['bbox'] = transform.shift_rect(e['bbox'], pos)
 
@@ -139,6 +140,9 @@ def render(images, pairs, out='output.jpg', shakiness=30, debug=True):
             annotate.arrow(draw, bbox, fill=colors[id])
         if debug:
             annotate.label(draw, id, bbox[:2])
+
+    if len(pairs) < config.MIN_PAIRS:
+        return
 
     # draw links
     for a, b in pairs:
@@ -215,10 +219,5 @@ if __name__ == '__main__':
                 html = tmpl.format(figures='\n'.join(figs))
                 with open('public/index.html', 'w') as f:
                     f.write(html)
-
-                # update site
-                util.upload([
-                    ('public/index.html', 'index.html'),
-                    ('public/vault/{}.jpg'.format(fname), 'vault/{}.jpg'.format(fname))
-                ])
+                util.sync()
         sleep(config.INTERVAL)

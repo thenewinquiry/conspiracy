@@ -111,7 +111,7 @@ def underline_and_crop_bbox(img, bbox, margin=(140, 60), shakiness=8):
     cy2 = round(by2 + margin[1] + noise(shakiness))
 
     # trim to fit
-    return img.crop((cx1, cy1, cx2, cy2))
+    return img.crop((cx1, cy1, cx2, cy2)).copy()
 
 
 def label(draw, text, pos, fill=(0,0,0), color=(244,244,66), bg=True, font=None):

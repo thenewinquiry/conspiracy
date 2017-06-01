@@ -2,6 +2,7 @@ import json
 import config
 from PIL import Image
 from glob import glob
+from util import hash
 from images import transform, compare
 
 
@@ -63,6 +64,7 @@ class Img():
 
 class Screenshot():
     def __init__(self, im):
+        self.id = '{}_s'.format(id(im))
         self.im = im
         self.entities = {}
 

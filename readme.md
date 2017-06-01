@@ -48,6 +48,3 @@ you can view the latest conspiracy by running an HTTP server from `public/`, e.g
 
     cd public
     python3 -m http.server
-
-visiting the `/history` endpoint will show all generated conspiracies.
-
