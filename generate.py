@@ -220,4 +220,6 @@ if __name__ == '__main__':
                 with open('public/index.html', 'w') as f:
                     f.write(html)
                 util.sync()
+        else:
+            print('no dice')
         sleep(config.INTERVAL)
