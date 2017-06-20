@@ -2,6 +2,10 @@
 
 machine and human apophenia
 
+created for [The New Inquiry](https://thenewinquiry.com/)'s [_Conspiracy_ issue](https://thenewinquiry.com/magazine/conspiracy)
+
+[view it live here](https://conspiracy.thenewinquiry.com/)
+
 ## setup
 
 before installing requirements, install `dlib` dependencies:
